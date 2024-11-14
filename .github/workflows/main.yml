@@ -41,7 +41,7 @@ jobs:
                 # Log branch to file and delete it
                 echo "$branch" >> branches_to_delete.txt
                 echo "Deleting branch: $branch"
-                # gh api -X DELETE "repos/$REPO/git/refs/heads/$branch"
+                gh api -X DELETE "repos/$REPO/git/refs/heads/$branch"
               done
 
       - name: Upload deleted branches list
