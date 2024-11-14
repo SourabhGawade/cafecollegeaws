@@ -1,0 +1,51 @@
+name: Delete Old Branches
+permissions:
+  contents: write
+on:
+  workflow_dispatch:  # Allows manual triggering if needed
+
+jobs:
+  delete-old-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install jq and GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          sudo apt-get install -y gh
+
+      - name: Delete branches older than 12 months
+        env:
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the date 12 months ago in ISO format
+          ONE_YEAR_AGO=$(date -d '12 months ago' --utc +%Y-%m-%dT%H:%M:%SZ)
+          echo "Deleting branches with last commit before: $ONE_YEAR_AGO"
+          
+          # Initialize a file to store branches that will be deleted
+          > branches_to_delete.txt
+          
+          # Fetch all branches and filter by last commit date
+          gh api -X GET "repos/$REPO/branches" --paginate \
+            | jq -r --arg date "$ONE_YEAR_AGO" '.[] | select(.commit.commit.author.date < $date) | .name' \
+            | while read branch; do
+                # Skip protected branches
+                if [[ "$branch" == "main" || "$branch" == "master" || "$branch" == "develop" || "$branch" == "qa" || "$branch" == "staging" ]]; then
+                  echo "Skipping protected branch: $branch"
+                  continue
+                fi
+                # Log branch to file and delete it
+                echo "$branch" >> branches_to_delete.txt
+                echo "Deleting branch: $branch"
+                # gh api -X DELETE "repos/$REPO/git/refs/heads/$branch"
+              done
+
+      - name: Upload deleted branches list
+        uses: actions/upload-artifact@v3
+        with:
+          name: deleted-branches
+          path: branches_to_delete.txt
